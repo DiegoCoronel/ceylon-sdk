@@ -1,6 +1,18 @@
 import ceylon.language { sys = system }
 import ceylon.time { Instant }
 import ceylon.time.base { ms = milliseconds }
+import ceylon.collection {
+	MutableMap,
+	HashMap
+}
+import ceylon.time.timezone.parser {
+	parseZoneLine,
+	parseLinkLine,
+	parseRuleLine
+}
+import ceylon.time.timezone.model {
+	Zone
+}
 
 "The interface representing a timezone."
 shared interface TimeZone of OffsetTimeZone | RuleBasedTimezone {
@@ -87,4 +99,45 @@ shared object timeZone {
         return OffsetTimeZone( offsetMilliseconds );
     }
 
+}
+
+object provider {
+	
+	[String*] supportedDatabases = ["africa", "antarctica", "asia", "australasia", "backward",
+	"etcetera", "europe", "northamerica", "southamerica"];
+	
+	MutableMap<String, Zone> zones = HashMap<String, Zone>();
+	
+	shared void load() {
+		for (database in supportedDatabases) {
+			value resource = `module ceylon.time`.resourceByPath("``database``");
+			if (exists resource) {
+				for (rawLine in resource.textContent().lines) {
+					if (rawLine.startsWith("#")) { continue; }
+					value line = cleanLine(rawLine); 
+					
+					if(line.startsWith("Zone")) {
+						value zoneTimeline = parseZoneLine(line);
+					} else if(line.startsWith("Link")) {
+						value link = parseLinkLine(line);
+					} else if(line.startsWith("Rule")) {
+						value rule = parseRuleLine(line);
+					} else {
+						value zoneTimeline = parseZoneLine(line, "");
+					}
+				}
+			}
+		}
+	}
+	
+	String cleanLine(String rawLine) {
+		String line;
+		if(exists index = rawLine.firstOccurrence('#')) {
+			line = rawLine.spanTo(index-1).trimmed;
+		} else {
+			line = rawLine.trimmed;
+		}
+		return line;
+	}
+	
 }

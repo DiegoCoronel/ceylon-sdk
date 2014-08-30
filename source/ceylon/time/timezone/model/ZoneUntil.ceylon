@@ -1,7 +1,8 @@
 import ceylon.time {
     Date,
     date,
-    time
+    time,
+	DateTime
 }
 import ceylon.time.base {
     years,
@@ -13,8 +14,12 @@ shared ZoneUntil untilPresent = ZoneUntil(date(years.maximum, december, 31), AtW
 "To represent a [[ZoneTimeline]] that continues until the present you should 
  use [[untilPresent]]"
 shared class ZoneUntil(date, ruleDefinition) {
-    shared Date date;
-    shared AtTime ruleDefinition;
+    Date date;
+    AtTime ruleDefinition;
+    
+    shared DateTime dateTime {
+        return date.at(ruleDefinition.time);
+    }
     
     shared actual Boolean equals(Object other) {
         if(is ZoneUntil other) {

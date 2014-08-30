@@ -2,7 +2,7 @@ import ceylon.time {
     Period
 }
 
-shared class ZoneTimeline(offset, rule, format, until) {
+shared class ZoneTimeline(offset, rule, format, until) satisfies Comparable<ZoneTimeline> {
     shared Period offset;
     shared ZoneRule rule;
     shared ZoneFormat format;
@@ -16,6 +16,10 @@ shared class ZoneTimeline(offset, rule, format, until) {
                     && until == other.until;
         }
         return false;
+    }
+    
+    shared actual Comparison compare(ZoneTimeline other) {
+        return until.dateTime <=> other.until.dateTime;
     }
     
 }
