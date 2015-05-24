@@ -7,7 +7,8 @@ import ceylon.dbc {
 }
 import ceylon.interop.java {
     toIntegerArray,
-    createJavaObjectArray
+    createJavaObjectArray,
+    javaByteArray
 }
 import ceylon.language.meta.model {
     Type
@@ -32,12 +33,17 @@ import ceylon.time.internal {
     TimeOfDay
 }
 
+import java.io {
+    ByteArrayInputStream
+}
 import java.lang {
     JBoolean=Boolean,
     JInteger=Integer,
     JLong=Long,
+    JFloat=Float,
     JString=String,
-    ObjectArray
+    ObjectArray,
+    ByteArray
 }
 import java.math {
     BigDecimal,
@@ -172,6 +178,12 @@ shared class Sql(newConnection) {
             case(is Array<TimeOfDay>) {
                 setArray(i, argument, stmt);
             }
+            case(is ByteArray) {
+                setBinaryStream(i, argument, stmt);
+            }
+            case(is Array<Byte>) {
+                setBinaryStream(i, argument, stmt);
+            }
             //TODO reader, inputStream, byte array
             else { stmt.setObject(i,argument); }
             i++;
@@ -215,72 +227,89 @@ shared class Sql(newConnection) {
             connection.get().createSqlArray(createJavaObjectArray<Object>(array), sqlArrayType));
     }
     
+    void setBinaryStream(Integer position, ByteArray|Array<Byte> array, PreparedStatement stmt ) {
+        ByteArray byteArray;
+        
+        switch (array)
+            case (is ByteArray) {
+                byteArray = array;
+            }
+            case (is Array<Byte>) {
+                byteArray = javaByteArray(array);
+            }
+
+        stmt.setBinaryStream(position, ByteArrayInputStream(byteArray), byteArray.size); 
+    }
+
     String sqlArrayType(ObjectArray<Object> argument) {
-        if (argument.size > 0) {
-            value first = argument.get(0);
-            
-            /*
-             TODO:  Due to https://github.com/ceylon/ceylon-compiler/issues/1753, we need to check the type of 
-                    first element of the array to determine the type of the database array.
-                    There is also the question of non-standard behaviour for at least on database, PostgreSQL,
-                    which will only accept lowercase versions of the types below.  (ex varchar, but not VARCHAR).
-                    As well, JDK 8 has java.sql.JDBCType that contains these String values, but JDK 7 does not,
-                    which is why the values below are hard-coded.
-                    
-             */
-            switch (first)
-            case (is String) {
-                return "varchar";
-            }
-            case (is Integer) {
-                return "integer";
-            }
-            case (is Boolean) {
-                return "boolean";
-            }
-            case (is Decimal) {
-                return "decimal";
-            }
-            case (is Float) {
-                return "float";
-            }
-            case (is JDate) {
-                if (is SqlTimestamp first) {
-                    return "timestamp";
-                } 
-                else if (is SqlTime first) {
-                    return "time";
-                }
-                else if (is SqlDate first) {
-                    return "date";
-                }
-                else {
-                    return "timestamp";
-                }
-            }
-            case (is GregorianDateTime) {
-                return "timestamp";
-            }
-            case (is GregorianDate) {
-                return "date";
-            }
-            case (is TimeOfDay) {
-                return "time";
-            }
-            // This is a special case not part of JDBCTypes but is supported by H2 and PostgreSQL.
-            case (is UUID) {
-                return "uuid";
-            }
-            else {
-                // TODO:  All other possible array types
-                throw Exception("Unsupported array data type");
-            }
+        if (is ObjectArray<String> argument) {
+            return "varchar";
         }
 
-        // TODO: This is a bug.  If it's the user's intent to provide an empty array, it is impossible to know
-        // which type that array is for.  Fixing this is blocked by: 
-        // https://github.com/ceylon/ceylon-compiler/issues/1753
-        throw Exception("Cannot infer the type of an empty array so it will be impossible to insert or update it");
+        if (is ObjectArray<JString> argument) {
+            return "varchar";
+        }
+
+        if (is ObjectArray<Integer> argument) {
+            return "integer";
+        }
+
+        if (is ObjectArray<JInteger> argument) {
+            return "integer";
+        }
+
+        if (is ObjectArray<JBoolean> argument) {
+            return "boolean";
+        }
+
+        if (is ObjectArray<Boolean> argument) {
+            return "boolean";
+        }
+
+        if (is ObjectArray<JFloat> argument) {
+            return "float";
+        }
+
+        if (is ObjectArray<Float> argument) {
+            return "float";
+        }
+
+        if (is ObjectArray<SqlTimestamp> argument) {
+            return "timestamp";
+        }
+
+        if (is ObjectArray<SqlTime> argument) {
+            return "time";
+        }
+
+        if (is ObjectArray<SqlDate> argument) {
+            return "date";
+        }
+
+        if (is ObjectArray<JDate> argument) {
+            return "timestamp";
+        }
+
+        if (is ObjectArray<GregorianDateTime> argument) {
+            return "timestamp";
+        }
+
+        if (is ObjectArray<GregorianDate> argument) {
+            return "date";
+        }
+
+        if (is ObjectArray<TimeOfDay> argument) {
+            return "time";
+        }
+
+        // This is a special case not part of JDBCTypes but is supported by H2 and PostgreSQL.
+        if (is ObjectArray<UUID> argument) {
+            return "uuid";
+        }
+
+        // TODO:  All other possible array types
+
+        throw Exception("Unsupported array data type");
     }
     
     CallableStatement prepareCall(ConnectionStatus conn, String sql, {Object*} arguments) {
@@ -341,9 +370,9 @@ shared class Sql(newConnection) {
             "maximum batch size must be strictly positive"
             assert (maxBatchSize>0);
             if (exists firstArgs = batchArguments.first) {
-                assert (batchArguments.fold(true, 
-                        (Boolean consistent, Object[] args) => 
-                                consistent && args.size==firstArgs.size));
+                assert (batchArguments.fold(true) 
+                    ((consistent, args) => 
+                        consistent && args.size==firstArgs.size));
                 value connectionStatus = connection.get();
                 try {
                     value stmt = connectionStatus.connection()
@@ -431,8 +460,8 @@ shared class Sql(newConnection) {
             "maximum batch size must be strictly positive"
             assert (maxBatchSize>0);
             if (exists firstArgs = batchArguments.first) {
-                assert (batchArguments.fold(true, 
-                (Boolean consistent, Object[] args) => 
+                assert (batchArguments.fold(true) 
+                    ((consistent, args) => 
                         consistent && args.size==firstArgs.size));
                 value connectionStatus = connection.get();
                 try {
@@ -531,7 +560,7 @@ shared class Sql(newConnection) {
             assert(exists row = rows[0], 
                    rows.size == 1, 
                    row.size == 1, 
-                   is Value v = row.values.first);
+                   is Value v = row.items.first);
             return v;
         }        
         
@@ -701,6 +730,7 @@ shared class Sql(newConnection) {
             case (is SqlDate) { v = Instant(x.time).date(); }
             // UUID conversion works in the else also, this is a placeholder in case Ceylon gets a native UUID type.
             case (is UUID) { v = x; }
+            case (is ByteArray) {v = x.byteArray; }
             else { v = x; }
         }
 

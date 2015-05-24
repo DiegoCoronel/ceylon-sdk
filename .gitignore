@@ -5,4 +5,7 @@ JDTClasses
 classes
 build
 .exploded
+reports
+.ceylon/config.old
+.ceylon/config~
 

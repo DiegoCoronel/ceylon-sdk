@@ -75,6 +75,14 @@ shared test void testMapEquality() {
     assertEquals(naturalOrderTreeMap{"a"->1, "b"->2}, HashMap{"b"->2, "a"->1});
 }
 
+test shared void testTreeMapSpan() {
+    value ts = naturalOrderTreeMap { 4->4, 5->5, 1->1, 2->2, 3->3 };
+    assertEquals(ts[1..3].sequence(),[1->1,2->2,3->3]);
+    assertEquals(ts[2..3].sequence(),[2->2,3->3]);
+    assertEquals(ts[3..1].sequence(),[3->3,2->2,1->1]);
+    assertEquals(ts[3..2].sequence(),[3->3,2->2]);
+}
+
 void doTestMapRemove(MutableMap<String,String> map) {
     assertEquals(map.put("a", "A"), null);
     assertEquals(map.put("b", "B"), null);
@@ -127,7 +135,7 @@ shared test void testMap2(){
     map.put("login", "ceylon");
     assertEquals(5, map.size);
     assertEquals(5, map.keys.size);
-    assertEquals(5, map.values.size);
+    assertEquals(5, map.items.size);
 }
 
 shared test void testMapDefines() {
@@ -294,9 +302,23 @@ test shared void testMapClone() {
     assertEquals(map, map.clone());
     assertEquals(map.clone().size, 2);
     assertEquals(map.clone().string, "{ 1->foo, 2->bar }");
+    assertEquals([for (e in map.clone()) e], [1->"foo", 2->"bar"]);
+    value linkedMap = HashMap<Integer,String>(linked);
+    linkedMap.put(1, "foo");
+    linkedMap.put(2, "bar");
+    linkedMap.put(3, "baz");
+    assertEquals([for (e in linkedMap.clone()) e], [1->"foo", 2->"bar", 3->"baz"]);
     value tree = TreeMap { function compare(Integer x, Integer y) => x<=>y; 1->"foo", 2->"bar" };
     assertEquals(tree, tree.clone());
     assertEquals(tree.clone().size, 2);
     assertEquals(tree.clone().string, "{ 1->foo, 2->bar }");
 }
 
+test shared void testMapBug301(){
+    value map = HashMap<String, String>();
+    map.put("a", "a");
+    map.put("b", "b");
+    map.remove("a");
+    assertEquals(map.size, 1);
+    assertEquals({ for (item in map) item }.sequence(), ["b"->"b"]);
+}

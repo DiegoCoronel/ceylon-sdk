@@ -1,21 +1,32 @@
-import ceylon.collection { StringBuilder }
-class Parser(String str){
+"A parser for JSON data presented as a String which calls  
+ the given visitor for each matched rule. 
+ 
+ To construct a JSON model the visitor would be a [[Builder]]."
+by("Stéphane Épardaud")
+shared class StringParser(str, visitor) {
+    
+    "The string of JSON data to be parsed."
+    String str;
+    
+    "The visitor to called for each matched rule."
+    shared Visitor visitor;
     
     Character[] chars = str.sequence();
     variable Integer index = 0;
     variable Integer line = 1;
     variable Integer column = 1;
-
-    Object parseObject(){
-        Object obj = Object{};
-        
+    
+    void parseObject(){
+        visitor.onStartObject();
         eatSpacesUntil('{');
         eatSpaces();
         if(!check('}')){
+            
             while(true){
-                String key = parseString();
+                String key = parseKeyOrString();
                 eatSpacesUntil(':');
-                obj.put(key, parseValue());
+                visitor.onKey(key);
+                parseValue();
                 
                 eatSpaces();
                 if(check('}')){
@@ -28,18 +39,17 @@ class Parser(String str){
                 }
             }
         }
-        return obj;
+        visitor.onEndObject();
     }
-
-    Array parseArray(){
-        Array arr = Array{};
-        
+    
+    void parseArray(){
+        visitor.onStartArray();
         eatSpacesUntil('[');
         eatSpaces();
         if(!check(']')){
             while(true){
-                arr.add(parseValue());
-
+                parseValue();
+                
                 eatSpaces();
                 if(check(']')){
                     break;
@@ -51,73 +61,84 @@ class Parser(String str){
                 }
             }
         }
-        return arr;
+        visitor.onEndArray();
     }
     
     throws(`class ParseException`, 
         "If the specified string cannot be parsed")
-    shared Value parseValue(){
+    shared void parseValue(){
         eatSpaces();
         Character c = char();
         if(c == '{'){
-            return parseObject();
+            parseObject();
+            return;
         }
         if(c == '['){
-            return parseArray();
+            parseArray();
+            return;
         }
         if(c == '"'){
-            return parseString();
+            parseString();
+            return;
         }
         if(c == 't'){
-            return parseTrue();
+            parseTrue();
+            return;
         }
         if(c == 'f'){
-            return parseFalse();
+            parseFalse();
+            return;
         }
         if(c == 'n'){
-            return parseNull();
+            parseNull();
+            return;
         }
         if(isDigit(c)
             || c == '-'){
-            return parseNumber();
+            parseNumber();
+            return;
         }
         throw ParseException(
             "Invalid value: expecting object, array, string, " +
-            "number, true, false, null but got `` c ``", 
+                    "number, true, false, null but got `` c ``", 
             line, column);
     }
     
-    Integer|Float parseNumber(){
+    void parseNumber(){
         eatSpaces();
         Boolean negative = check('-');
         Integer wholePart = parseDigits();
         
-        if(check('.')){
+        if(hasMore && check('.')){
             Integer start = index;
             Integer fractionPart = parseDigits();
             Integer digits = index - start;
             Float float = wholePart.float + 
                     (fractionPart.float / (10 ^ digits).float);
             Float signedFloat = negative then -float else float;
-            Integer? exp = parseExponent();
-            if(exists exp){
-                return signedFloat * (10.float ^ exp.float);
+            Integer? exp1 = parseExponent();
+            if(exists exp1){
+                visitor.onNumber(signedFloat * (10.float ^ exp1.float));
+                return;
             }
-            return signedFloat;
+            visitor.onNumber(signedFloat);
+            return;
         }
-
+        
         Integer signedInteger = 
                 negative then -wholePart else wholePart;
-        Integer? exp = parseExponent();
-        if(exists exp){
-            return signedInteger.float * (10.float ^ exp.float);
+        Integer? exp2 = parseExponent();
+        if(exists exp2){
+            visitor.onNumber(signedInteger.float * (10.float ^ exp2.float));
+            return;
         }
-        return signedInteger;
+        visitor.onNumber(signedInteger);
+        return;
     }
-
+    
     Integer? parseExponent(){
-        if(check('e')
-            || check('E')){
+        if(hasMore && (check('e')
+            || check('E'))) {
             Boolean negativeExponent;
             if(check('-')){
                 negativeExponent = true;
@@ -128,15 +149,15 @@ class Parser(String str){
             }
             Integer exponentPart = parseDigits();
             return negativeExponent 
-                then -exponentPart 
-                else exponentPart;
+            then -exponentPart 
+            else exponentPart;
         }
         return null;
     }
-        
+    
     function parseDigit(Character c)
             => c.integer - '0'.integer;
-        
+    
     Integer parseDigits(){
         Character c = eatChar();
         if(!isDigit(c)){
@@ -145,39 +166,39 @@ class Parser(String str){
                 line, column);
         }
         variable Integer digits = parseDigit(c);
-        while(isDigit(char())){
+        while(hasMore && isDigit(char())){
             digits *= 10;
             digits += parseDigit(eatChar());
         }
         return digits;
     }
     
-    Boolean parseTrue(){
+    void parseTrue(){
         eatSpacesUntil('t');
         eat('r');
         eat('u');
         eat('e');
-        return true;
+        visitor.onBoolean(true);
     }
-
-    Boolean parseFalse(){
+    
+    void parseFalse(){
         eatSpacesUntil('f');
         eat('a');
         eat('l');
         eat('s');
         eat('e');
-        return false;
+        visitor.onBoolean(false);
     }
-
-    NullInstance parseNull(){
+    
+    void parseNull(){
         eatSpacesUntil('n');
         eat('u');
         eat('l');
         eat('l');
-        return nil;
+        visitor.onNull();
     }
     
-    String parseString(){
+    String parseKeyOrString(){
         eatSpacesUntil('"');
         StringBuilder buf = StringBuilder();
         while(!check('"')){
@@ -190,12 +211,15 @@ class Parser(String str){
         }
         return buf.string;
     }
+    void parseString() {
+        visitor.onString(parseKeyOrString());
+    }
     
     Character parseStringEscape(){
         Character c = eatChar();
         if(c == '"'
             || c == '\\'
-            || c == '/'){
+                || c == '/'){
             return c;
         }
         if(c == 'b'){
@@ -223,10 +247,10 @@ class Parser(String str){
     
     Character parseStringUnicode(){
         Integer codePoint = 
-            parseHex() * 16 ^ 3
-            + parseHex() * 16 ^ 2
-            + parseHex() * 16
-            + parseHex();
+                parseHex() * 16 ^ 3
+                + parseHex() * 16 ^ 2
+                + parseHex() * 16
+                + parseHex();
         return codePoint.character;
     }
     
@@ -250,13 +274,16 @@ class Parser(String str){
             line, column);
     }
     
+    "Whether there is another character"
+    Boolean hasMore => index < chars.size;
+    
     void eatSpaces(){
-        while(index < chars.size
+        while(hasMore
             && isSpace(char())){
             moveOne();
         } 
     }
-
+    
     void eatSpacesUntil(Character c){
         eatSpaces();
         eat(c);
@@ -279,6 +306,7 @@ class Parser(String str){
         moveOne();
     }
     
+    "The character at the current index, or throw"
     Character char(){
         if(exists Character c = chars[index]){
             return c;
@@ -288,6 +316,7 @@ class Parser(String str){
             line, column);
     }
     
+    "The character at the current index, and move one"
     Character eatChar(){
         Character c = char();
         moveOne();
@@ -299,7 +328,7 @@ class Parser(String str){
             || c == '\n'
             || c == '\r'
             || c == '\t';
-
+    
     void moveOne() {
         value c = char();
         switch(c)
@@ -321,9 +350,21 @@ class Parser(String str){
         return codePoint >= '0'.integer && 
                 codePoint <= '9'.integer; 
     }
+    shared void parse() {
+        parseValue();
+        eatSpaces();
+        if (hasMore) {
+            throw ParseException("Unexpected extra characters", line, column);
+        }
+    }
 }
 
 "Parses a JSON string into a JSON value"
 by("Stéphane Épardaud")
 throws(`class Exception`, "If the JSON string is invalid")
-shared Value parse(String str) => Parser(str).parseValue();
+shared Value parse(String str) {
+    value builder = Builder();
+    value parser = StringParser(str, builder);
+    parser.parse();
+    return builder.result;
+}

@@ -9,7 +9,7 @@
    [[ceylon.net.uri::parse]].
    
        void getit(String uriAsString) {
-           URI uri = parse(uriAsString);
+           Uri uri = parse(uriAsString);
            Request request = uri.get();
            Response response = request.execute();
            print(response.contents);
@@ -55,22 +55,23 @@
            server.start(SocketAddress("127.0.0.1",8080));
        }"""
 
-by("Stéphane Épardaud, Matej Lazar")
+by("Stéphane Épardaud", "Matej Lazar")
 license("Apache Software License")
-module ceylon.net "1.1.0" {
+native("jvm")
+module ceylon.net "1.1.1" {
     
-    shared import ceylon.collection "1.1.0";
-    shared import ceylon.io "1.1.0";
-    import ceylon.file "1.1.0";
+    shared import ceylon.collection "1.1.1";
+    shared import ceylon.io "1.1.1";
+    import ceylon.file "1.1.1";
     
     // -- java modules --
     
     import java.base "7";
     
-    import io.undertow.core "1.0.0.Beta20";
+    import io.undertow.core "1.1.3.Final";
 
-    import org.jboss.xnio.api "3.1.0.CR7";
-    import org.jboss.xnio.nio "3.1.0.CR7";
-    import ceylon.interop.java "1.1.0";
+    import org.jboss.xnio.api "3.3.0.Final";
+    import org.jboss.xnio.nio "3.3.0.Final";
+    import ceylon.interop.java "1.1.1";
     
 }

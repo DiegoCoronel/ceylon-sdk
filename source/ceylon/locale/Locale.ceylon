@@ -1,58 +1,87 @@
-import ceylon.collection {
-    HashMap
-}
 import ceylon.language.meta.declaration {
     Module
 }
 
+"Aggregates localized information associated with a certain 
+ locale, including:
+ 
+ - the local [[language]],
+ - the local [[currency]],
+ - localized date, time, currency, and numeric [[formats]],
+ - local representations of other [[languages]] and
+   [[currencies]]."
 shared sealed class Locale(language, formats, 
-    languages, currencies, currencyCode=null) {
+    languages, currencies, currencyCode=null,
+    lowercaseMappings = emptyMap, 
+    uppercaseMappings = emptyMap) {
     
+    "The language of this locale."
     shared Language language;
     
+    "Localized date, time, currency, and numeric formats
+     for this locale."
     shared Formats formats;
     
-    shared HashMap<String,Language> languages;
+    "Localized representations of other languages."
+    shared Map<String,Language> languages;
+    
+    "Localized representations of other currencies."
     shared Map<String,Currency> currencies;
+    
+    "Localized mappings of uppercase characters to lowercase."
+    Map<Character,String> lowercaseMappings;
+    
+    "Localized mappings of lowercase characters to uppercase."
+    Map<Character,String> uppercaseMappings;
     
     String? currencyCode;
     
-    shared Currency? currency {
-        if (exists currencyCode) {
-            return currencies[currencyCode];
-        }
-        else {
-            return null;
-        }
-    }
+    "The currency of this locale."
+    shared Currency? currency 
+            => if (exists currencyCode) 
+            then currencies[currencyCode] 
+            else null;
+    
+    "A string with the characters of the given string
+     converted to uppercase according to the rules of this
+     locale."
+    shared String uppercase(String string)
+            => uppercaseMappings.fold(string)((str, mapping) 
+            => str.replace(mapping.key.string, mapping.item))
+                .uppercased;
+    
+    "A string with the characters of the given string
+     converted to lowercase according to the rules of this
+     locale."
+    shared String lowercase(String string) 
+            => lowercaseMappings.fold(string)((str, mapping) 
+            => str.replace(mapping.key.string, mapping.item))
+                .lowercased;
     
     string => language.string;
 }
 
-Locale? current = locale(system.locale);
-
-shared Locale currentLocale {
-    //TODO: cache it
-    "locale data for current locale must exist"
-    assert (exists current);
-    return current;
-}
-
+"Returns a [[Locale]] containing information about the
+ locale with the given locale [[tag]]."
 shared Locale? locale(String tag) {
     value filePath = tag + ".txt";
     if (exists resource = 
             localeModule.resourceByPath(filePath)) {
-        Iterator<String> lines = resource.textContent()
-                .lines.iterator();
+        value lines = 
+                resource.textContent()
+                        .lines.iterator();
         
-        value languageAndCurrency = parseLanguage(lines, tag);
+        value [language,currency] 
+                = parseLanguage(lines, tag);
         
         return Locale {
-            language = languageAndCurrency[0];
-            currencyCode = languageAndCurrency[1];
+            language = language;
+            currencyCode = currency;
             formats = parseFormats(lines);
             languages = parseLanguages(lines);
             currencies = parseCurrencies(lines);
+            lowercaseMappings = parseCaseMappings(lines);
+            uppercaseMappings = parseCaseMappings(lines);
         };
     }
     else {
@@ -60,8 +89,15 @@ shared Locale? locale(String tag) {
     }
 }
 
-Module localeModule = `module ceylon.locale`;
+"Returns a [[Locale]] containing information about the
+ locale of the current system."
+see (`value system.locale`)
+shared Locale systemLocale {
+    "locale data for current locale must exist"
+    assert (exists systemLocaleCache);
+    return systemLocaleCache;
+}
 
-{String?*} columns(String line) => line.split('|'.equals, true, false)
-        .map(String.trimmed)
-        .map((String col) => !col.empty then col);
+Locale? systemLocaleCache = locale(system.locale);
+
+Module localeModule = `module ceylon.locale`;

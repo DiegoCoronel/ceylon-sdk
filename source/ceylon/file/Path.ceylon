@@ -17,7 +17,10 @@ import java.lang {
 shared sealed interface Path
         satisfies Comparable<Path> {
     
-    "This path, after removing the last path element."
+    "The parent path of this path, formed by 
+     removing the last path element, or, if this 
+     path is the root path, and has no path elements, 
+     this root path."
     shared formal Path parent;
     
     "This path, after appending the given path 
@@ -51,6 +54,10 @@ shared sealed interface Path
     
     "Determine if this is an absolute path."
     shared formal Boolean absolute;
+    
+    "Determine if this is a root path, with no 
+     [[elements]]."
+    shared formal Boolean root;
     
     "Obtain a `Resource` representing the file or
      directory located at this path."

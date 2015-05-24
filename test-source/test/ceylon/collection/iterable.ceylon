@@ -5,7 +5,6 @@ import ceylon.test {
     assertEquals,
     assertThatException
 }
-import ceylon.collection { StringBuilder }
 
 shared interface IterableTests satisfies CategoryTests {
     
@@ -386,7 +385,7 @@ shared interface IterableTests satisfies CategoryTests {
                 return next;
             }
         }
-        throw;
+        throw Exception("no more elements");
     }
  
 }

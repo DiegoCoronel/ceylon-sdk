@@ -2,7 +2,7 @@ import java.lang {
     ObjectArray
 }
 import java.sql {
-    Connection, 
+    Connection,
     SqlArray=Array
 }
 
@@ -32,7 +32,8 @@ class ConnectionStatus(Connection() connectionSource) {
     shared void close() {
         if (exists c=conn) {
 			use--;
-            if (!tx && use==0) {
+            if (!tx && use==0/* && 
+                !transactionManager.transactionActive*/) {
                 c.close();
             }
         }

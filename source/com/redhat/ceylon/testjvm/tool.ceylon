@@ -1,3 +1,6 @@
+import ceylon.collection {
+    ArrayList
+}
 import ceylon.language.meta {
     modules
 }
@@ -25,15 +28,9 @@ import java.net {
 import org.jboss.modules {
     Module {
         ceylonModuleLoader=callerModuleLoader
-    },
-    ModuleIdentifier {
-        createModuleIdentifier=create
-    },
-    ModuleClassLoader
+    }
 }
-import ceylon.collection {
-    ArrayList
-}
+import ceylon.modules.jboss.runtime { CeylonModuleLoader }
 
 shared void run() {
     Runner().run();
@@ -43,10 +40,13 @@ class Runner() {
     
     value moduleNameAndVersions = ArrayList<[String, String]>();
     value testSources = ArrayList<TestSource>();
+    value testListeners = ArrayList<TestListener>();
     variable Integer port = -1;
     variable Socket? socket = null;
     variable PrintWriter? writer = null;
     variable Boolean tap = false;
+    variable Boolean report = false;
+    variable Integer exitCode = 0;
     
     shared void run() {
         try {
@@ -55,35 +55,40 @@ class Runner() {
             connect();
             
             if (testSources.empty) {
-                for (value moduleNameAndVersion in moduleNameAndVersions.sequence()) {
+                for (value moduleNameAndVersion in moduleNameAndVersions) {
                     assert (exists m = modules.find(moduleNameAndVersion[0], moduleNameAndVersion[1]));
                     testSources.add(m);
                 }
             }
             
-            TestListener testListener;
             if (exists w = writer) {
                 void publishEvent(String json) {
                     w.write(json);
                     w.write('\{END OF TRANSMISSION}'.integer);
                     w.flush();
                 }
-                testListener = TestEventPublisher(publishEvent);
+                testListeners.add(TestEventPublisher(publishEvent));
             } else if (tap) {
-                testListener = TapLoggingListener();
+                testListeners.add(TapLoggingListener());
             } else {
-                testListener = TestLoggingListener {
-                    colorWhite = process.propertyValue("com.redhat.ceylon.common.tool.terminal.color.white");
+                testListeners.add(TestLoggingListener {
+                    resetColor = process.propertyValue("com.redhat.ceylon.common.tool.terminal.color.reset");
                     colorGreen = process.propertyValue("com.redhat.ceylon.common.tool.terminal.color.green");
                     colorRed = process.propertyValue("com.redhat.ceylon.common.tool.terminal.color.red");
-                };
+                });
             }
             
-            createTestRunner(testSources.sequence(), [testListener]).run();
+            if (report) {
+                testListeners.add(HtmlReportGenerator());
+            }
+            
+            value result = createTestRunner(testSources.sequence(), testListeners.sequence()).run();
+            exitCode = result.isSuccess then 0 else 100;
         }
         finally {
             disconnect();
         }
+        process.exit(exitCode);
     }
     
     void init() {
@@ -107,6 +112,9 @@ class Runner() {
             if (arg == "--tap") {
                 tap = true;
             }
+            if (arg == "--report") {
+                report = true;
+            }
             prev = arg;
         }
     }
@@ -118,10 +126,8 @@ class Runner() {
     }
     
     void loadModule(String modName, String modVersion) {
-        ModuleIdentifier modIdentifier = createModuleIdentifier(modName, modVersion);
-        Module mod = ceylonModuleLoader.loadModule(modIdentifier);
-        ModuleClassLoader modClassLoader = mod.classLoader;
-        modClassLoader.loadClass(modName + ".$module_");
+        assert(is CeylonModuleLoader loader = ceylonModuleLoader);
+        loader.loadModuleSynchronous(modName, modVersion);
     }
     
     void connect() {

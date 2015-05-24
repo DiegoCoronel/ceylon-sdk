@@ -26,12 +26,12 @@
      Process process = createProcess {
          command = \"ls -l\";
          path = home;
-         OverwriteFileOutput output { 
-             path=home.childPath(\"out.txt\");
-         }
-         AppendFileOutput error { 
-             path=home.childPath(\"err.txt\");
-         }
+         output = OverwriteFileOutput {
+             path = home.childPath(\"out.txt\");
+         };
+         error = AppendFileOutput {
+             path = home.childPath(\"err.txt\");
+         };
      };
    
  The objects `currentInput`, `currentOutput`, and 
@@ -50,7 +50,8 @@
  To wait for the child process to terminate, call
  the `waitForExit()` method of `Process`."
 by("Gavin King")
-module ceylon.process "1.1.0" {
-    shared import ceylon.file "1.1.0";
+native("jvm")
+module ceylon.process "1.1.1" {
+    shared import ceylon.file "1.1.1";
     import java.base "7";
 }

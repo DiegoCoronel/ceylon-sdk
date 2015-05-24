@@ -3,9 +3,6 @@ import ceylon.io.buffer {
     ByteBuffer,
     CharacterBuffer
 }
-import ceylon.collection {
-    StringBuilder
-}
 
 "Represents a UTF-8 character set as defined by
  (the specification)[http://tools.ietf.org/html/rfc3629]."
@@ -112,7 +109,7 @@ shared object utf8 satisfies Charset {
                 throw Exception("Invalid UTF-8 sequence: missing `` needsMoreBytes `` bytes");
             }
             value result = builder.string;
-            builder.reset();
+            builder.clear();
             return result;
         }
         

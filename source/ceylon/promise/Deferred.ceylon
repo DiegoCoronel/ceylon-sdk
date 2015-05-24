@@ -1,90 +1,188 @@
-import java.util.concurrent.atomic { AtomicReference }
+import ceylon.promise.internal { AtomicRef }
 
-"The deferred class is the primary implementation of the [[Promise]] interface.
+"The deferred class is the primary implementation of the 
+ [[Promise]] interface.
   
- The promise is accessible using the `promise` attribute of the deferred.
+ The promise is accessible using the `promise` attribute of 
+ the deferred.
   
- The deferred can either be fulfilled or rejected via the [[Resolver.fulfill]] or [[Resolver.reject]]
- methods. Both methods accept an argument or a promise to the argument, allowing the deferred to react
- on a promise."
+ The deferred can either be fulfilled or rejected via the 
+ [[Completable.fulfill]] or [[Completable.reject]] methods. Both 
+ methods accept an argument or a promise to the argument, 
+ allowing the deferred to react on a promise."
 by("Julien Viet")
-shared class Deferred<Value>() satisfies Resolver<Value> & Promised<Value> {
+shared class Deferred<Value>(context = globalExecutionContext) 
+        satisfies Completable<Value> 
+                & Promised<Value> {
     
-    abstract class State() of ListenerState | PromiseState {
-    }
+    abstract class State() of ListenerState | PromiseState {}
     
-    class ListenerState(Anything(Value) onFulfilled,
-            Anything(Throwable) onRejected,
+    class PromiseState(shared Promise<Value> promise)
+            extends State() {}
+    
+    class ListenerState(onFulfilled, onRejected,
             ListenerState? previous = null)
-        extends State() {
-
+            extends State() {
+        
+        Anything(Value) onFulfilled;
+        Anything(Throwable) onRejected;
+        
         shared void update(Promise<Value> promise) {
             if (exists previous) {
                 previous.update(promise);
             }
-            promise.compose(onFulfilled, onRejected);
+            promise.map(onFulfilled, onRejected);
         }
     }
     
-    class PromiseState(shared Promise<Value> promise) extends State() {
-    }
+    "The current context"
+    ExecutionContext context;
     
     "The current state"
-    AtomicReference<State?> state = AtomicReference<State?>(null);
+    value state = AtomicRef<State?>(null);
     
     "The promise of this deferred."
-    shared actual object promise extends Promise<Value>() {
+    shared actual object promise 
+            extends Promise<Value>() {
         
-        shared actual Promise<Result> handle<Result>(
-                <Promise<Result>(Value)> onFulfilled, 
-                <Promise<Result>(Throwable)> onRejected) {
-                
-            Deferred<Result> deferred = Deferred<Result>();
-            void callback<T>(<Promise<Result>(T)> on, T val) {
-                try {
-                    Promise<Result> result = on(val);
-                    deferred.fulfill(result);
-                } catch(Throwable e) {
-                    deferred.reject(e);
+        context => outer.context;
+
+        shared actual Promise<Result> map<Result>(
+                Result(Value) onFulfilled,
+                Result(Throwable) onRejected) {
+          
+          ExecutionListener[] listeners = currentExecutionListeners.get();
+          Anything(Anything())[] wrappers;
+          if (!listeners.empty) {
+              wrappers = [ *
+                  listeners.map((ExecutionListener listener) => listener())
+              ];
+          } else {
+              wrappers =[];
+          }
+          
+          value childContext = context.childContext();
+          value deferred = Deferred<Result>(childContext);
+          void callback<T>(Result(T) on, T val) {
+            
+              variable Anything() task = void () {
+                  Result t;
+                  try {
+                      t = on(val);
+                  } catch (Throwable e) {
+                      deferred.reject(e);
+                      return;
+                  }
+                  deferred.fulfill(t);
+              };
+              
+              if (!listeners.empty) {
+                  for (wrapper in wrappers) {
+                      Anything() f = task;
+                      task = void() {
+                        wrapper(f);
+                      };
+                  }
+              }
+            
+              context.run(task);
+          }
+          
+          foobar {
+            void onFulfilledCallback(Value val)
+                    => callback(onFulfilled, val);
+            void onRejectedCallback(Throwable reason)
+                    => callback(onRejected, reason);
+          };
+          
+          // 
+          return deferred.promise;
+        }
+
+        shared actual Promise<Result> flatMap<Result>(
+                Promise<Result>(Value) onFulfilled, 
+                Promise<Result>(Throwable) onRejected) {
+            
+            ExecutionListener[] listeners = currentExecutionListeners.get();
+            Anything(Anything())[] wrappers;
+            if (!listeners.empty) {
+              wrappers = [ *
+                  listeners.map((ExecutionListener listener) => listener())
+              ];
+            } else {
+              wrappers =[];
+            }
+
+            value childContext = context.childContext();
+            value deferred = Deferred<Result>(childContext);
+            void callback<T>(Promise<Result>(T) on, T val) {
+              
+                variable Anything() task = void () {
+                    Promise<Result> t;
+                    try {
+                        t = on(val);
+                    } catch (Throwable e) {
+                        deferred.reject(e);
+                        return;
+                    }
+                    deferred.fulfill(t);
+                };
+              
+                if (!listeners.empty) {
+                    for (wrapper in wrappers) {
+                        Anything() f = task;
+                        task = void() {
+                           wrapper(f);
+                        };
+                    }
                 }
+
+                context.run(task);
             }
             
-            void onFulfilledCallback(Value val) {
-                callback(onFulfilled, val);
-            }
-            void onRejectedCallback(Throwable reason) {
-                callback(onRejected, reason);
-            }
+            foobar {
+              void onFulfilledCallback(Value val)
+                      => callback(onFulfilled, val);
+              void onRejectedCallback(Throwable reason)
+                      => callback(onRejected, reason);
+            };
             
             // 
+            return deferred.promise;
+        }
+
+        void foobar(void onFulfilledCallback(Value val), 
+            void onRejectedCallback(Throwable reason)) {
             while (true) {
-                State? current = state.get();
+                value current = state.get();
                 switch (current)
                 case (is Null) {
-                    State next = ListenerState(onFulfilledCallback, onRejectedCallback);
+                    State next = ListenerState(onFulfilledCallback, 
+                        onRejectedCallback);
                     if (state.compareAndSet(current, next)) {
                         break;
                     }
                 }
                 case (is ListenerState) {
-                    State next = ListenerState(onFulfilledCallback,
+                    State next = ListenerState(onFulfilledCallback, 
                         onRejectedCallback, current);
                     if (state.compareAndSet(current, next)) {
                         break;
                     }
                 }
                 case (is PromiseState) {
-                    current.promise.compose(onFulfilledCallback, onRejectedCallback);
+                    current.promise.map(onFulfilledCallback, 
+                        onRejectedCallback);
                     break;
                 }
             }
-            return deferred.promise;
         }
+        
     }
         
     void update(Promise<Value> promise) {
         while (true) {
-            State? current = state.get();    
+            value current = state.get();    
             switch (current) 
             case (is Null) {
                 PromiseState next = PromiseState(promise);	
@@ -106,13 +204,14 @@ shared class Deferred<Value>() satisfies Resolver<Value> & Promised<Value> {
     }
 
     shared actual void fulfill(Value|Promise<Value> val) {
-        Promise<Value> adapted = adaptValue<Value>(val);
-        update(adapted);
+        if (is Promise<Value> val) {
+            update(val);        
+        } else {
+            update(context.fulfilledPromise<Value>(val));       
+        }
     }
 
-    shared actual void reject(Throwable reason) {
-        Promise<Value> adapted = adaptReason<Value>(reason);
-        update(adapted);
-    }
-
+    reject(Throwable reason) 
+            => update(context.rejectedPromise<Value>(reason));
+    
 }

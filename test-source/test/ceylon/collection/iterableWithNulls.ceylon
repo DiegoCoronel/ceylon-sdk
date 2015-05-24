@@ -185,16 +185,17 @@ shared interface IterableWithNullElementsTests satisfies IterableTests {
     }
     
     test shared default void testIndexedWithNulls() {
-        assertEquals(createIterableWithNulls({null}).indexed.sequence(), []);
+        assertEquals(createIterableWithNulls({null}).indexed.sequence(), [0->null]);
         
         value iterable = createIterableWithNulls {"a", null, "b", "c", null}; 
         value iterator = iterable.iterator();
-        value nulls = nullIndexes(iterable);
-        value indexes = [0, 1, 2, 3, 4].select((Integer i) => ! i in nulls).iterator();
+        value indexes = [0, 1, 2, 3, 4].iterator();
         assertEquals(iterable.indexed.sequence(), [
-            next<Integer>(indexes) -> next<String>(iterator),
-        next<Integer>(indexes) -> next<String>(iterator),
-        next<Integer>(indexes) -> next<String>(iterator) ]);
+            next<Integer>(indexes) -> next<String?>(iterator),
+            next<Integer>(indexes) -> next<String?>(iterator),
+            next<Integer>(indexes) -> next<String?>(iterator),
+            next<Integer>(indexes) -> next<String?>(iterator),
+            next<Integer>(indexes) -> next<String?>(iterator) ]);
     }
     
     test shared default void testFollowingWithNulls() {

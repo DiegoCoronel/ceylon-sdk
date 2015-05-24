@@ -24,15 +24,15 @@ shared class Array({Value*} values = {})
 
     "Returns a serialised JSON representation"
     shared actual String string {
-        StringPrinter p = StringPrinter();
-        p.printArray(this);
+        StringEmitter p = StringEmitter();
+        visit(this, p);
         return p.string;
     }
 
     "Returns a pretty-printed serialised JSON representation"
     shared String pretty {
-        StringPrinter p = StringPrinter(true);
-        p.printArray(this);
+        StringEmitter p = StringEmitter(true);
+        visit(this, p, true);
         return p.string;
     }
 
@@ -62,6 +62,9 @@ shared class Array({Value*} values = {})
     
     insert(Integer index, Value val) 
             => list.insert(index, val);
+    
+    insertAll(Integer index, {Value*} elements)
+            => list.insertAll(index, elements);
     
     delete(Integer index) => list.delete(index);
     

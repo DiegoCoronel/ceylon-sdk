@@ -4,8 +4,7 @@
 by ("Gavin King")
 class UnmodifiableMap<out Key,out Item>(Map<Key,Item> map)
         satisfies Map<Key,Item>
-        given Key satisfies Object
-        given Item satisfies Object {
+        given Key satisfies Object {
 
     get(Object key) => map.get(key);
     defines(Object key) => map.defines(key);
@@ -15,12 +14,14 @@ class UnmodifiableMap<out Key,out Item>(Map<Key,Item> map)
     size => map.size;
     
     keys => map.keys;
-    values = map.values;
+    items = map.items;
     
     equals(Object that) => map.equals(that);    
     hash => map.hash;
     
     clone() => UnmodifiableMap(map.clone());
+    
+    each(void step(Key->Item element)) => map.each(step);
     
 }
 
@@ -28,5 +29,4 @@ class UnmodifiableMap<out Key,out Item>(Map<Key,Item> map)
  returned `Map` to [[MutableMap]]."
 shared Map<Key,Item> unmodifiableMap<Key,Item>(Map<Key,Item> map)
         given Key satisfies Object
-        given Item satisfies Object
         => UnmodifiableMap(map);
